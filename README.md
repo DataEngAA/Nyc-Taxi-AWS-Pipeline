@@ -4,7 +4,7 @@ End-to-end, fully automated AWS data pipeline using S3, Glue, Athena, Lambda, RD
 
 ## 📋 Description
 
-A production-grade, multi-source data pipeline built entirely on AWS. It ingests NYC Yellow Taxi trip data, daily RDS PostgreSQL records, and real-time OpenWeather API data — transforms and joins all three sources using PySpark on AWS Glue — and serves the results through Amazon Athena and a live Grafana dashboard.
+An end-to-end AWS data engineering pipeline that ingests, transforms, and visualizes NYC taxi trip data from multiple sources — fully automated with nightly orchestration via AWS Step Functions.
 
 The entire pipeline runs automatically every night via EventBridge scheduling with no manual intervention required. CloudWatch alarms send email alerts if anything fails.
 
