@@ -1,18 +1,30 @@
 # 🚕 NYC Taxi AWS Data Pipeline
 
-End-to-end, fully automated AWS data pipeline using S3, Glue, Athena, Lambda, RDS, EventBridge, CloudWatch and Grafana — built on NYC Taxi data with real-time weather enrichment.
+End-to-end, fully automated AWS data pipeline using S3, Glue, Athena, Lambda, RDS, Step Functions, EventBridge, CloudWatch and Grafana — built on NYC Taxi data with real-time weather enrichment.
 
 ## 📋 Description
 
 An end-to-end AWS data engineering pipeline that ingests, transforms, and visualizes NYC taxi trip data from multiple sources — fully automated with nightly orchestration via AWS Step Functions.
 
-The entire pipeline runs automatically every night via EventBridge scheduling with no manual intervention required. CloudWatch alarms send email alerts if anything fails.
+The entire pipeline runs automatically every night via a single EventBridge rule that triggers a Step Functions state machine. Each step only runs if the previous one succeeded. CloudWatch alarms send email alerts if anything fails.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
+EventBridge (22:00 UTC nightly)
+         │
+         ▼
+AWS Step Functions (nyc-taxi-pipeline)
+         │  Orchestrates all steps — dependency control & failure handling
+         │
+         ├─▶ Lambda 1: insert-daily-trips     → RDS PostgreSQL (~1000 trips)
+         ├─▶ Lambda 2: extract-from-rds       → Exports trips to S3 parquet
+         ├─▶ Lambda 3: ingest-weather-data    → Fetches NYC weather to S3 JSON
+         ├─▶ Glue ETL: nyc-taxi-etl           → PySpark transform, clean, join
+         └─▶ Glue Crawler: nyc-taxi-crawler   → Catalogs partitions in Athena
+
 Data Sources
 ├── NYC TLC Yellow Taxi Parquet  (static, Jan + Jul 2025, 7.3M trips)
 ├── RDS PostgreSQL               (daily Lambda-generated trips)
@@ -40,7 +52,7 @@ S3 Processed Layer (Gold)
          ▼  Grafana Dashboard (EC2 t2.micro)
 
 CloudWatch Alarms + SNS → Email alerts on any failure
-EventBridge → Fully automated nightly schedule
+EventBridge (1 rule)    → Triggers Step Functions state machine nightly
 ```
 
 ---
@@ -55,7 +67,8 @@ EventBridge → Fully automated nightly schedule
 | Amazon Athena | Serverless SQL queries directly on S3 |
 | RDS PostgreSQL | Operational database — daily trip data source |
 | AWS Lambda | 3 serverless ingestion functions |
-| Amazon EventBridge | Cron-based nightly scheduling (5 rules) |
+| AWS Step Functions | Pipeline orchestration — sequencing, dependency control, failure handling |
+| Amazon EventBridge | Single cron rule triggering Step Functions at 22:00 UTC |
 | Amazon CloudWatch | Monitor Lambda + Glue for failures |
 | Amazon SNS | Email alerts when pipeline fails |
 | Amazon EC2 | Hosts Grafana dashboard server (t2.micro) |
@@ -64,17 +77,27 @@ EventBridge → Fully automated nightly schedule
 | PySpark | Distributed data processing inside Glue |
 | Python | Lambda functions and data processing |
 
-## Automated Nightly Schedule
+---
 
-| Time (UTC) | Step | What It Does |
-|---|---|---|
-| 22:00 | Lambda: insert-daily-trips | Inserts ~1000 realistic trips into RDS PostgreSQL |
-| 23:00 | Lambda: extract-from-rds | Extracts yesterday's RDS trips → S3 parquet |
-| 23:30 | Lambda: ingest-weather-data | Fetches NYC weather → S3 JSON |
-| 01:00 | Glue ETL: nyc-taxi-etl | Transforms all 3 sources, joins RDS + weather, writes to S3 |
-| 02:00 | Glue Crawler | Catalogs new S3 partitions in Athena Data Catalog |
+## 🔄 Step Functions Workflow
+
+The state machine `nyc-taxi-pipeline` executes all steps sequentially. If any step fails, the pipeline stops immediately and transitions to `PipelineFailed` — no downstream steps run on bad data.
+
+```
+Start
+  └─▶ InsertDailyTrips    (Lambda)
+        └─▶ ExtractFromRDS  (Lambda)
+              └─▶ IngestWeather  (Lambda)
+                    └─▶ WaitBeforeGlue  (60s)
+                          └─▶ RunGlueETL   (Glue Job)
+                                └─▶ RunCrawler  (Glue Crawler)
+                                      ├─▶ PipelineSucceeded ✅
+                                      └─▶ PipelineFailed ❌
+```
 
 Every morning, new data is automatically available in Athena and reflected in Grafana — zero manual steps required.
+
+---
 
 ## 🗄️ Dataset
 
@@ -91,9 +114,9 @@ Every morning, new data is automatically available in Athena and reflected in Gr
 - Daily NYC weather from OpenWeather API
 - Temperature, humidity, wind speed, conditions
 
+---
 
-
-## Key Technical Lessons
+## 🔑 Key Technical Lessons
 
 **1. Parquet + Spark timestamp compatibility:**
 ```python
@@ -123,15 +146,19 @@ except Exception as e:
 ---
 
 ## 🚀 How to Reproduce
+
 1. Create S3 bucket with `raw/` and `processed/` folders
 2. Upload NYC Taxi parquet files to `raw/yellow_taxi/`
 3. Create RDS PostgreSQL instance and `taxi_trips` table
 4. Deploy 3 Lambda functions with required layers (psycopg2, pandas, requests)
 5. Create Glue ETL job using script in `glue/` — add `--S3_BUCKET` job parameter
 6. Create Glue Crawler pointing to `s3://your-bucket/processed/`
-7. Set up 5 EventBridge rules for nightly scheduling
-8. Create CloudWatch alarms + SNS topic for failure alerts
-9. Launch EC2 t2.micro, install Grafana, connect Athena as data source
+7. Create Step Functions state machine using the JSON in `stepfunctions/`
+8. Create 1 EventBridge rule at `cron(0 22 * * ? *)` targeting the state machine
+9. Create CloudWatch alarms + SNS topic for failure alerts
+10. Launch EC2 t2.micro, install Grafana, connect Athena as data source
+
+---
 
 ## 💰 Cost
 
@@ -142,18 +169,24 @@ This project runs almost entirely within the AWS free tier:
 - **S3** — free up to 5GB
 - **RDS** — db.t3.micro free tier (750 hours/month)
 - **EC2** — t2.micro free tier (750 hours/month)
+- **Step Functions** — 4,000 state transitions free per month
 
 Total monthly cost for this project: **under $1**
 
-## Monitoring & Alerts
-CloudWatch Alarms on each Lambda and Glue step
-SNS email notifications on failure
-Step Functions execution history for full audit trail
-Grafana dashboard for visual monitoring of trip and weather trends
+---
 
+## 📊 Monitoring & Alerts
 
-## Key Design Decisions
-Step Functions over individual EventBridge rules — replaced 4 independent EventBridge rules with a single orchestrated state machine, adding proper sequencing, dependency control, and failure-safe execution.
-Bronze/Gold S3 layers — raw data preserved in Bronze, clean aggregated data in Gold for Athena queries.
-Partitioned S3 paths — year=Y/month=M/day=D/ structure enables efficient Athena partition pruning.
-Glue Crawler — automatically detects new partitions so Athena always queries fresh data without manual schema updates.
+- CloudWatch Alarms on each Lambda and Glue step
+- SNS email notifications on failure
+- Step Functions execution history for full audit trail
+- Grafana dashboard for visual monitoring of trip and weather trends
+
+---
+
+## 🧠 Key Design Decisions
+
+- **Step Functions over individual EventBridge rules** — replaced 4 independent EventBridge rules with a single orchestrated state machine, adding proper sequencing, dependency control, and failure-safe execution. One Lambda failing no longer lets the others run blindly.
+- **Bronze/Gold S3 layers** — raw data preserved in Bronze, clean aggregated data in Gold for Athena queries.
+- **Partitioned S3 paths** — `year=Y/month=M/day=D/` structure enables efficient Athena partition pruning.
+- **Glue Crawler** — automatically detects new partitions so Athena always queries fresh data without manual schema updates.
