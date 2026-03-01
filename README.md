@@ -133,9 +133,6 @@ except Exception as e:
 8. Create CloudWatch alarms + SNS topic for failure alerts
 9. Launch EC2 t2.micro, install Grafana, connect Athena as data source
 
-
----
-
 ## 💰 Cost
 
 This project runs almost entirely within the AWS free tier:
@@ -156,7 +153,7 @@ Grafana dashboard for visual monitoring of trip and weather trends
 
 
 ## Key Design Decisions
-Step Functions over individual EventBridge rules — replaced 4 independent EventBridge rules with a single orchestrated state machine, adding proper sequencing, dependency control, and failure-safe execution
-Bronze/Gold S3 layers — raw data preserved in Bronze, clean aggregated data in Gold for Athena queries
-Partitioned S3 paths — year=Y/month=M/day=D/ structure enables efficient Athena partition pruning
-Glue Crawler — automatically detects new partitions so Athena always queries fresh data without manual schema updates
+Step Functions over individual EventBridge rules — replaced 4 independent EventBridge rules with a single orchestrated state machine, adding proper sequencing, dependency control, and failure-safe execution.
+Bronze/Gold S3 layers — raw data preserved in Bronze, clean aggregated data in Gold for Athena queries.
+Partitioned S3 paths — year=Y/month=M/day=D/ structure enables efficient Athena partition pruning.
+Glue Crawler — automatically detects new partitions so Athena always queries fresh data without manual schema updates.
