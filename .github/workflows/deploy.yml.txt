@@ -1,0 +1,47 @@
+name: Deploy Lambda Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Lambda/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy insert-daily-trips
+        run: |
+          cd Lambda/insert-daily-trips
+          zip -r function.zip lambda_function.py
+          aws lambda update-function-code \
+            --function-name insert-daily-trips \
+            --zip-file fileb://function.zip
+
+      - name: Deploy extract-from-rds
+        run: |
+          cd Lambda/extract-from-rds
+          zip -r function.zip lambda_function.py
+          aws lambda update-function-code \
+            --function-name extract-from-rds \
+            --zip-file fileb://function.zip
+
+      - name: Deploy ingest-weather-data
+        run: |
+          cd Lambda/ingest-weather-data
+          zip -r function.zip lambda_function.py
+          aws lambda update-function-code \
+            --function-name ingest-weather-data \
+            --zip-file fileb://function.zip
