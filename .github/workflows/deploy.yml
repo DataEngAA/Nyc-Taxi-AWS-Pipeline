@@ -24,24 +24,21 @@ jobs:
 
       - name: Deploy insert-daily-trips
         run: |
-          cd Lambda/insert-daily-trips
-          zip -r function.zip lambda_function.py
+          zip function.zip Lambda/insert_daily_trips.py
           aws lambda update-function-code \
             --function-name insert-daily-trips \
             --zip-file fileb://function.zip
 
       - name: Deploy extract-from-rds
         run: |
-          cd Lambda/extract-from-rds
-          zip -r function.zip lambda_function.py
+          zip function.zip Lambda/extract_from_rds.py
           aws lambda update-function-code \
             --function-name extract-from-rds \
             --zip-file fileb://function.zip
 
       - name: Deploy ingest-weather-data
         run: |
-          cd Lambda/ingest-weather-data
-          zip -r function.zip lambda_function.py
+          zip function.zip Lambda/ingest_weather_data.py
           aws lambda update-function-code \
             --function-name ingest-weather-data \
             --zip-file fileb://function.zip
