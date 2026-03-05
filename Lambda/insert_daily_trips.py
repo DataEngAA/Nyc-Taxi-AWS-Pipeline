@@ -1,4 +1,4 @@
-# Updated timezone fix - IST
+# CI/CD fix - lambda_function rename
 
 import json
 import boto3
