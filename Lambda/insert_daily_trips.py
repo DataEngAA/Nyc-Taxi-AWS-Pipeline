@@ -13,11 +13,11 @@ def lambda_handler(event, context):
     # RDS Connection — credentials stored as Lambda Environment Variables
     # Set these in Lambda → Configuration → Environment Variables
     conn = psycopg2.connect(
-        host=os.environ['RDS_HOST'],
+        host=os.environ['DB_HOST'],
         port=5432,
-        dbname=os.environ['RDS_DBNAME'],
-        user=os.environ['RDS_USER'],
-        password=os.environ['RDS_PASSWORD'],
+        dbname=os.environ['DB_NAME'],
+        user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD'],
         sslmode="require"
     )
     cursor = conn.cursor()
